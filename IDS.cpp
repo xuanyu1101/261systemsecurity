@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -45,6 +47,10 @@ float sumTO = 0.00, TOvariance = 0.00, TOstdDeviation = 0.00;
 float sumES = 0.00, ESvariance = 0.00, ESstdDeviation = 0.00;
 float sumEO = 0.00, EOvariance = 0.00, EOstdDeviation = 0.00;
 float sumED = 0.00, EDvariance = 0.00, EDstdDeviation = 0.00;
+
+//daily counts
+float d1logincontribution, d1TOcontribution, d1EScontribution, d1EOcontribution, d1EDcontribution;
+float LoginAnamolyThreshold;
 
 void initialInput() {
 	string line, eventName, eventType, minVal, maxVal, weight, statName, mean, standardDev;
@@ -292,7 +298,9 @@ void printDaysData(){
 	outputLogs << endl;
 	outputLogs.close();
 	
+}
 
+void calMeanStdDev(){
 	cout << "**********************" << endl;
 	cout << "Generating Mean for number of logins..." << endl;
 	meanlogins.insert (meanlogins.begin(), One[0]);
@@ -360,7 +368,7 @@ void printDaysData(){
 	ESvariance = ESvariance/5;
 	//Calculating Standard Deviation of Emails Sent
 	ESstdDeviation = sqrt(ESvariance);
-	cout << "Standard Deviation for Time Online is: " << ESstdDeviation << endl;
+	cout << "Standard Deviation for Emails Sent is: " << ESstdDeviation << endl;
 	cout << endl;
 
 	
@@ -373,18 +381,18 @@ void printDaysData(){
 	meanEO.insert (meanEO.begin(), Five[3]);
 	for (auto j = meanEO.rbegin(); j!= meanEO.rend(); j++)
 	sumEO += *j;
-	cout << "Sum of total Emails Sent in " << meanEO.size() << " days is " << sumEO << endl;
+	cout << "Sum of total Emails Opened in " << meanEO.size() << " days is " << sumEO << endl;
 	//Calculating mean of Emails Opened
 	float mean_of_EO = sumEO / meanEO.size();
 	cout << endl;
-	cout << "Emails Sent Mean is " << mean_of_EO << endl;
+	cout << "Emails Opened Mean is " << mean_of_EO << endl;
 	//Calculating Variance of Emails Opened
 	for (auto j = meanEO.rbegin(); j!= meanEO.rend(); j++)
 	EOvariance += pow(*j - mean_of_EO, 2);
 	EOvariance = EOvariance/5;
 	//Calculating Standard Deviation of Emails Opened
 	EOstdDeviation = sqrt(EOvariance);
-	cout << "Standard Deviation for Time Online is: " << EOstdDeviation << endl;
+	cout << "Standard Deviation for Emails Opened is: " << EOstdDeviation << endl;
 	cout << endl;
 
 
@@ -400,18 +408,31 @@ void printDaysData(){
 	cout << "Sum of total Emails Deleted in " << meanED.size() << " days is " << sumED << endl;
 	//Calculating mean of Emails Deleted
 	float mean_of_ED = sumED / meanED.size();
+	cout << endl;
 	cout << "Emails Deleted Mean is " << mean_of_ED << endl;
 	//Calculating Variance of Emails Deleted
 	for (auto j = meanED.rbegin(); j!= meanED.rend(); j++)
 	EDvariance += pow(*j - mean_of_ED, 2);
 	EDvariance = EDvariance/5;
-	//Calculating Standard Deviation of Emails Opened
+	//Calculating Standard Deviation of Emails Deleted
 	EDstdDeviation = sqrt(EDvariance);
 	cout << "Standard Deviation for Emails Deleted is: " << EDstdDeviation << endl;
 	cout << endl;
+/*	
+	cout << "------------------------------------" << endl;
+	cout << "Calculating Anamoly for Day 1..." << endl;
+	// absolute ((mean - daily count) / standard deviation) * weight)
+	d1logincontribution = abs((mean_of_logins - (One.at(0)) / LstdDeviation) *3);
+	d1TOcontribution = abs((mean_of_TO - (One.at(1)) / LstdDeviation) *2);
+	d1EScontribution = abs((mean_of_ES - (One.at(2)) / LstdDeviation) *1);
+	d1EOcontribution = abs((mean_of_EO - (One.at(3)) / LstdDeviation) *1);
+	d1EDcontribution = abs((mean_of_ED - (One.at(4)) / LstdDeviation) *2);
+	float totaldailylogincounts = d1logincontribution + d1TOcontribution + d1EScontribution + d1EOcontribution + d1EDcontribution;
+	cout << "Total Day Contribution	 are: " << totaldailylogincounts << endl;
+	LoginAnamolyThreshold = totaldailylogincounts * 2;
+	cout << "Login Anamoly Threshold is: " << LoginAnamolyThreshold << endl;
+*/
 }
-
-
 
 int main (){
 
@@ -425,7 +446,10 @@ int main (){
 	printDaysData();
 
 	//mean and stdDev
-	//mean();
+	calMeanStdDev();
+	
+	//Anamoly Counter
+	//calAnamoly();
 
 
 	return 0;
