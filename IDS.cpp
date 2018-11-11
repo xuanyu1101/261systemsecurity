@@ -15,60 +15,54 @@
 
 using namespace std;
 
+
+
 // map for stats 
 // pair<string, vector<string>>(statName, statVals - (mean) and (standardDev))
-unordered_map<string, vector<string>> statsMap;
+static unordered_map<string, vector<string>> statsMap;
 
 //vector<string> statVals; // vector for mean and standardDev
 
 // map for events
 // pair<string, vector<string>>(eventName, eventVals - (eventType), (minVal), (maxVal and (weight))
-unordered_map<string, vector<string>> eventsMap;
+static unordered_map<string, vector<string>> eventsMap;
 
 //vector<string> eventVals; // vector for (eventType), (minVal), (maxVal and (weight)
 
-// 5 days of data
-vector <float> One;
-vector <float> Two;
-vector <float> Three;
-vector <float> Four;
-vector <float> Five;
-vector <float> temp; // store temp data
+static vector<vector<float> > trainingData;
+static vector<string> indexVec;
+static vector<pair<float,float>> meanSDvec;	//vector of pair(mean, stdDev) of each event
 
-//Store mean data for each event
-vector <float> meanlogins; // Logins
-vector <float> meanTO; //Time online
-vector <float> meanES; // Emails Sent
-vector <float> meanEO; // Emails Opened
-vector <float> meanED; // Emails Deleted
 
-float sumlogins = 0.00, Lvariance = 0.00, LstdDeviation = 0.00;
-float sumTO = 0.00, TOvariance = 0.00, TOstdDeviation = 0.00;
-float sumES = 0.00, ESvariance = 0.00, ESstdDeviation = 0.00;
-float sumEO = 0.00, EOvariance = 0.00, EOstdDeviation = 0.00;
-float sumED = 0.00, EDvariance = 0.00, EDstdDeviation = 0.00;
+void initialInput(string eFile, string sFile) {
 
-//daily counts
-float d1logincontribution, d1TOcontribution, d1EScontribution, d1EOcontribution, d1EDcontribution;
-float LoginAnamolyThreshold;
+	cout << "=============================" << endl;
+	cout << "	INITIAL ENGINE	" << endl;
+	cout << "=============================" << endl;
 
-void initialInput() {
 	string line, eventName, eventType, minVal, maxVal, weight, statName, mean, standardDev;
 	int counter = 0;
-	ifstream eventFile("Events.txt");
-	ifstream statsFile("Stats.txt");
+	int numOfEvents;
+	ifstream eventFile(eFile);
+	ifstream statsFile(sFile);
 
 	//=================================== Storing values from Events.txt ======================================================
 
-	cout << "========== Printing values from Events.txt ================" << endl;
+	cout << "1. Printing values from Events.txt" << endl;
+	cout << endl;
 
 	//obtain individual event value split by delimiter ':'
 	while (getline(eventFile, line)){
 		stringstream ss(line);	
-		vector<string> eventVals; // vector for mean and standardDev
+		vector<string> eventVals; // vector for event values 
+
+		if(counter == 0){
+			numOfEvents = stoi(line);
+		}
+	
 		
 		//push each event's values into a vector
-		if(counter != 0){
+		else if(counter <= numOfEvents){
 			getline(ss, eventName, ':');
 			getline(ss, eventType, ':');
 			getline(ss, minVal, ':');
@@ -102,26 +96,32 @@ void initialInput() {
 				
 			cout << endl;
 
-		}
+	}
 
 	eventFile.close();
+	cout << endl;
 	counter = 0;
 
 	//================================= Storing values from Stats.txt =============================================================
 
-	cout << "========== Printing values from Stats.txt ================" << endl;
+	cout << "2. Printing values from Stats.txt" << endl;
+	cout << endl;
 
 	//obtain individual event value split by delimiter ':'
 	while (getline(statsFile, line)){
 		stringstream ss(line);	
 		vector<string> statVals; // vector for mean and standardDev
 		
+
+		if(counter == 0){
+			numOfEvents = stoi(line);
+		}
+
 		//push each event's values into a vector
-		if(counter != 0){
+		else if(counter <= numOfEvents){
 			getline(ss, statName, ':');
 			getline(ss, mean, ':');
 			getline(ss, standardDev, ':');
-	
 
 			statVals.push_back(mean);
 			statVals.push_back(standardDev);
@@ -133,6 +133,7 @@ void initialInput() {
 		counter++;
 	}
 
+	
 	for(unordered_map<string, vector<string>>::iterator pos = statsMap.begin(); pos != statsMap.end(); pos++)
 	{
 		cout << pos->first << " ";
@@ -148,6 +149,7 @@ void initialInput() {
 	}
 
 	statsFile.close();
+	cout << endl;
 }
 
 // compute random number
@@ -168,9 +170,9 @@ string prd(float x, const int decDigits) {
 }
 
 // Creates 5 days of data
-void valuesForDays(string input, int decneeded) {	
+float getVal(string input, int decneeded) {	
 	// find from stats map according to string
-	unordered_map<string, vector<string>>::const_iterator got = statsMap.find (input);
+	unordered_map<string, vector<string>>::const_iterator got = statsMap.find(input);
 
 	string mean = got->second[0];
 	string::size_type st_mean;     
@@ -186,270 +188,279 @@ void valuesForDays(string input, int decneeded) {
 	
 	float total = 0;
 	
-	temp.clear();
 	float randData; 
-    	srand(time(0));
 	total = 0; // reset total to 0
 	
 
-    	for(int count = 0; count < 5; count ++){
 
-		randData = RandomFloat(max, min);
+	randData = RandomFloat(max, min);
 		
-		// one decimal place
-		if (decneeded == 1) {
-			string randD = prd(randData, 1);
-			string::size_type st_r;  
-			randData = stof (randD,&st_r); // convert from string to float
-		}
-		// no decimal place 
-		else {
-			string randD = prd(randData, 0);
-			string::size_type st_r;  
-			randData = stof (randD,&st_r); // convert from string to float 
-		}
+	// one decimal place
+	if (decneeded == 1) {
 
-		temp.push_back(randData); // store in temp data
+		string randD = prd(randData, 1); //convert float to string
+
+		//round the last value of the string
+		char ch = *randD.rbegin(); //get last character of string
+		string LastChar;
+		LastChar.push_back(ch); //convert char to string
+
+		string::size_type st_r;  
+		float chFloat = stof(LastChar,&st_r); //convert from string to float
+		randData = stof (randD,&st_r); // convert from string to float
 		
-    	}	
+		float diff; //variable for difference to add to randData
+		
+		//if below 0.5, round up to 0.5
+		if (chFloat < 5){
+			//find out the difference to be added to randData
+			diff = 5 - chFloat;
+		}
+	
+		//if above 0.5, round up to single integer
+		else if (chFloat > 5){
+			diff = 10 - chFloat;
+		}
 
+		//add to randData (to make it either 0.5 or 1.0)
+		randData = randData + (diff/10);
+	}
+	
+	// no decimal place 
+	else {
+		string randD = prd(randData, 0);
+		string::size_type st_r;  
+		randData = stof (randD,&st_r); // convert from string to float 
+	}
+
+	return randData;
+		
 	// push to individual days
-	One.push_back(temp[0]);
-	Two.push_back(temp[1]);
-	Three.push_back(temp[2]);
-	Four.push_back(temp[3]);
-	Five.push_back(temp[4]);
+	//One.push_back(temp[0]);
+	//Two.push_back(temp[1]);
+	//Three.push_back(temp[2]);
+	//Four.push_back(temp[3]);
+	//Five.push_back(temp[4]);
 }
 
-void generateDaysData() {
-	cout << "+++++++++++++++++++++++" << endl;
-	// creating 5 days of data
-	cout << "Generating Data..." << endl;
-
-	// float needed? 1 - Yes, 2 - No
+void generateTrngData(string numOfDays) {
+	int days = stoi(numOfDays);
+	string eventName;
+	vector<string> eventVals;
+	vector<float> daysVal;
 	int decneeded = 0;
-	string event;
+	float data;
+	
+	//storing the eventNames found in stats.txt into a vector to correspond to the index
+	for(auto& index: statsMap){
+		indexVec.push_back(index.first);
+	}
+		
+	
+	//generate events for x days of data
+	for(int i = 0; i < days; i++){
 
-	event = "Logins";
-	valuesForDays(event,2);
-	cout << "Logins data are done." << endl;
+		for (auto& event: statsMap) {
 
-	event = "Time online";
-	valuesForDays(event,1);
-	cout << "Time online data are done." << endl;
+		    //find the event stats in eventsMap for the events in stats.txt
+		    unordered_map<string, vector<string>>::const_iterator itr = eventsMap.find(event.first);
+		    
+		    if( itr != eventsMap.end() )
+		    {
+			eventVals = itr->second;
 
-	event = "Emails sent";
-	valuesForDays(event,2);
-	cout << "Emails sent data are done." << endl;
+			    //check if event is continuous or discrete	
+			    // float needed? 1 - Yes, 0 - No	    
+			    if(eventVals[0] == "D")
+				decneeded = 0; 
+			    else
+				decneeded = 1;
+			
+		    
+			    eventName = event.first;
+			    data = getVal(eventName, decneeded);
+			    daysVal.push_back(data);
+		    }
+		}
 
-	event = "Emails opened";
-	valuesForDays(event,3);
-	cout << "Emails opened data are done." << endl;
+		trainingData.push_back(daysVal);
+		daysVal.clear();
+	}
 
-	event = "Emails deleted";
-	valuesForDays(event,4);
-	cout << "Emails deleted data are done." << endl;
 }
 
 // print data from each day
 void printDaysData(){
-	cout << "+++++++++++++++++++++++" << endl;
-	cout << "Day One: " << endl;
-	for (auto i = One.begin(); i != One.end(); ++i)
-	    std::cout << *i << ' ';
-
-	cout << endl;
-
-	cout << "Day Two: " << endl;
-	for (auto i = Two.begin(); i != Two.end(); ++i)
-	    std::cout << *i << ' ';
-
-	cout << endl;
-
-	cout << "Day Three: " << endl;
-	for (auto i = Three.begin(); i != Three.end(); ++i)
-	    std::cout << *i << ' ';
-
-	cout << endl;
-
-	cout << "Day Four: " << endl;
-	for (auto i = Four.begin(); i != Four.end(); ++i)
-	    std::cout << *i << ' ';
-
-	cout << endl;
-
-	cout << "Day Five: " << endl;
-	for (auto i = Five.begin(); i != Five.end(); ++i)
-	    std::cout << *i << ' ';
 	
-	cout << endl;
-	cout << "+++++++++++++++++++++++" << endl;
-	cout << "Outputting logs to Logs.txt file..." << endl;
+	cout << "========================================" << endl;
+	cout << "	ACTIVITY STIMULATION ENGINE	" << endl;
+	cout << "========================================" << endl;
+
+	//display generated data for x days on screen
+	for(int i =0; i < trainingData.size(); i++){
+		cout << "Day: " << i+1 << endl;
+		cout << endl;
+
+		for(int i =0; i < indexVec.size(); i++){
+			cout << indexVec[i] << ":";
+		}
+
+		cout << endl;
+		
+		for(int j=0; j < trainingData[i].size(); j++)
+		{
+			cout << trainingData[i][j] << ":";
+		}
+		
+		cout << endl;
+		cout << endl;
+	}
+
+	//storing of data for x days in Logs.txt
+	cout << "\n[LOGS STORED IN Logs.txt]" << endl;
+
 	std::ofstream outputLogs ("Logs.txt", std::ofstream::out);
-	copy(One.begin(), One.end(), ostream_iterator<float>(outputLogs, ":"));
-	outputLogs << endl;
-	copy(Two.begin(), Two.end(), ostream_iterator<float>(outputLogs, ":"));
-	outputLogs << endl;
-	copy(Three.begin(), Three.end(), ostream_iterator<float>(outputLogs, ":"));
-	outputLogs << endl;	
-	copy(Four.begin(), Four.end(), ostream_iterator<float>(outputLogs, ":"));
-	outputLogs << endl;
-	copy(Five.begin(), Five.end(), ostream_iterator<float>(outputLogs, ":"));
-	outputLogs << endl;
+
+	//obtain the index (eventName) corresponding to the values stored in each vector in trainingData
+	//i.e trainingdata[i][0] = Emails Deleted
+	//trainingdata[i][1] = Emails opened
+	//trainingdata[i][2] = Emails sent
+	//trainingdata[i][3] = Time Online
+	//trainingdata[i][4] = Logins
+	//to store in the first line of Logs.txt
+
+	for(int i =0; i < indexVec.size(); i++){
+		outputLogs << indexVec[i] << ":";
+	}
+	
+	outputLogs<< endl;
+
+	for(int i =0; i < trainingData.size(); i++){
+		for(int j=0; j < trainingData[i].size(); j++)
+		{
+			outputLogs << trainingData[i][j] << ":";
+		}
+		outputLogs << endl;
+	}
+
 	outputLogs.close();
+	cout << endl;
 	
 }
 
 void calMeanStdDev(){
-	cout << "**********************" << endl;
-	cout << "Generating Mean for number of logins..." << endl;
-	meanlogins.insert (meanlogins.begin(), One[0]);
-	meanlogins.insert (meanlogins.begin(), Two[0]);
-	meanlogins.insert (meanlogins.begin(), Three[0]);
-	meanlogins.insert (meanlogins.begin(), Four[0]);
-	meanlogins.insert (meanlogins.begin(), Five[0]);
-	for (auto j = meanlogins.rbegin(); j!= meanlogins.rend(); j++)
-	sumlogins += *j;
-	cout << "Sum of total logins in " << meanlogins.size() << " days is " << sumlogins << endl;
-	//Calculating mean of Logins
-	float mean_of_logins = sumlogins / meanlogins.size();
-	cout << "Login Mean is " << mean_of_logins << endl;
+
+	float sum, mean, variance, stdDev;
 	
-	//Calculating Variance of Logins
-	for (auto j = meanlogins.rbegin(); j!= meanlogins.rend(); j++)
-	Lvariance += pow(*j - mean_of_logins, 2);
-	Lvariance = Lvariance/5;
-	//Calculating Standard Deviation of Logins
-	LstdDeviation = sqrt(Lvariance);
-	cout << "Standard Deviation for Login is: " << LstdDeviation << endl;
-	cout << endl;
-	
-	cout << "**********************" << endl;
-	cout << "Generating Mean for number of Time Online..." << endl;
-	meanTO.insert (meanTO.begin(), One[1]);
-	meanTO.insert (meanTO.begin(), Two[1]);
-	meanTO.insert (meanTO.begin(), Three[1]);
-	meanTO.insert (meanTO.begin(), Four[1]);
-	meanTO.insert (meanTO.begin(), Five[1]);
-	for (auto j = meanTO.rbegin(); j!= meanTO.rend(); j++)
-	sumTO += *j;
-	cout << "Sum of total Time Online in " << meanTO.size() << " days is " << sumTO << endl;
-	//Calculating mean of Time Online
-	float mean_of_TO = sumTO / meanTO.size();
-	cout << "Time Online Mean is " << mean_of_TO << endl;
+	cout << "=============================" << endl;
+	cout << "	ANALYSIS ENGINE		" << endl;
+	cout << "=============================" << endl;
+
+	for(int i = 0; i < statsMap.size(); i++){
+		//reset values
+		sum = 0;
+		variance = 0;
+
+		cout << "Generating mean & standard deviation for " << indexVec[i] << endl;
 		
-	//Calculating Variance of Time Online
-	for (auto j = meanTO.rbegin(); j!= meanTO.rend(); j++)
-	TOvariance += pow(*j - mean_of_TO, 2);
-	TOvariance = TOvariance/5;
-	//Calculating Standard Deviation of Time Online
-	TOstdDeviation = sqrt(TOvariance);
-	cout << "Standard Deviation for Time Online is: " << TOstdDeviation << endl;
-	cout << endl;
+		for(int j = 0; j < trainingData.size(); j++){
+			sum += trainingData[j][i];
+		}
 
-	cout << "**********************" << endl;
-	cout << "Generating Mean for number of Emails Sent..." << endl;
-	meanES.insert (meanES.begin(), One[2]);
-	meanES.insert (meanES.begin(), Two[2]);
-	meanES.insert (meanES.begin(), Three[2]);
-	meanES.insert (meanES.begin(), Four[2]);
-	meanES.insert (meanES.begin(), Five[2]);
-	for (auto j = meanES.rbegin(); j!= meanES.rend(); j++)
-	sumES += *j;
-	cout << "Sum of total Emails Sent in " << meanES.size() << " days is " << sumES << endl;
-	cout << endl;
-	//Calculating mean of Emails Sent
-	float mean_of_ES = sumES / meanES.size();
-	cout << "Emails Sent Mean is " << mean_of_ES << endl;
+		mean = sum/trainingData.size();
+		
+		cout << "Mean: " << mean << endl;
 
-	//Calculating Variance of Emails Sent
-	for (auto j = meanES.rbegin(); j!= meanES.rend(); j++)
-	ESvariance += pow(*j - mean_of_ES, 2);
-	ESvariance = ESvariance/5;
-	//Calculating Standard Deviation of Emails Sent
-	ESstdDeviation = sqrt(ESvariance);
-	cout << "Standard Deviation for Emails Sent is: " << ESstdDeviation << endl;
-	cout << endl;
+		for(int k = 0; k < trainingData.size(); k++){
+			variance += pow(trainingData[k][i] - mean, 2);
+		}
 
+		variance = variance/trainingData.size();
+		stdDev = sqrt(variance);
+		
+		cout << "Standard Deviation: " << stdDev << endl;
+
+		meanSDvec.push_back(make_pair(mean, stdDev)); //vector storing the mean and standard deviation for each event
+		
+		cout << endl;	
+	}
 	
-	cout << "**********************" << endl;
-	cout << "Generating Mean for number of Emails Opened..." << endl;
-	meanEO.insert (meanEO.begin(), One[3]);
-	meanEO.insert (meanEO.begin(), Two[3]);
-	meanEO.insert (meanEO.begin(), Three[3]);
-	meanEO.insert (meanEO.begin(), Four[3]);
-	meanEO.insert (meanEO.begin(), Five[3]);
-	for (auto j = meanEO.rbegin(); j!= meanEO.rend(); j++)
-	sumEO += *j;
-	cout << "Sum of total Emails Opened in " << meanEO.size() << " days is " << sumEO << endl;
-	//Calculating mean of Emails Opened
-	float mean_of_EO = sumEO / meanEO.size();
 	cout << endl;
-	cout << "Emails Opened Mean is " << mean_of_EO << endl;
-	//Calculating Variance of Emails Opened
-	for (auto j = meanEO.rbegin(); j!= meanEO.rend(); j++)
-	EOvariance += pow(*j - mean_of_EO, 2);
-	EOvariance = EOvariance/5;
-	//Calculating Standard Deviation of Emails Opened
-	EOstdDeviation = sqrt(EOvariance);
-	cout << "Standard Deviation for Emails Opened is: " << EOstdDeviation << endl;
-	cout << endl;
-
-
-	cout << "**********************" << endl;
-	cout << "Generating Mean for number of Emails Deleted..." << endl;
-	meanED.insert (meanED.begin(), One[4]);
-	meanED.insert (meanED.begin(), Two[4]);
-	meanED.insert (meanED.begin(), Three[4]);
-	meanED.insert (meanED.begin(), Four[4]);
-	meanED.insert (meanED.begin(), Five[4]);
-	for (auto j = meanED.rbegin(); j!= meanED.rend(); j++)
-	sumED += *j;
-	cout << "Sum of total Emails Deleted in " << meanED.size() << " days is " << sumED << endl;
-	//Calculating mean of Emails Deleted
-	float mean_of_ED = sumED / meanED.size();
-	cout << endl;
-	cout << "Emails Deleted Mean is " << mean_of_ED << endl;
-	//Calculating Variance of Emails Deleted
-	for (auto j = meanED.rbegin(); j!= meanED.rend(); j++)
-	EDvariance += pow(*j - mean_of_ED, 2);
-	EDvariance = EDvariance/5;
-	//Calculating Standard Deviation of Emails Deleted
-	EDstdDeviation = sqrt(EDvariance);
-	cout << "Standard Deviation for Emails Deleted is: " << EDstdDeviation << endl;
-	cout << endl;
-/*	
-	cout << "------------------------------------" << endl;
-	cout << "Calculating Anamoly for Day 1..." << endl;
-	// absolute ((mean - daily count) / standard deviation) * weight)
-	d1logincontribution = abs((mean_of_logins - (One.at(0)) / LstdDeviation) *3);
-	d1TOcontribution = abs((mean_of_TO - (One.at(1)) / LstdDeviation) *2);
-	d1EScontribution = abs((mean_of_ES - (One.at(2)) / LstdDeviation) *1);
-	d1EOcontribution = abs((mean_of_EO - (One.at(3)) / LstdDeviation) *1);
-	d1EDcontribution = abs((mean_of_ED - (One.at(4)) / LstdDeviation) *2);
-	float totaldailylogincounts = d1logincontribution + d1TOcontribution + d1EScontribution + d1EOcontribution + d1EDcontribution;
-	cout << "Total Day Contribution	 are: " << totaldailylogincounts << endl;
-	LoginAnamolyThreshold = totaldailylogincounts * 2;
-	cout << "Login Anamoly Threshold is: " << LoginAnamolyThreshold << endl;
-*/
 }
 
-int main (){
+void calAnomaly(){
+
+	cout << "=============================" << endl;
+	cout << "	ALERT ENGINE		" << endl;
+	cout << "=============================" << endl;
+
+	//Anomaly calculation = (absolute(mean-dailycount)/std dev)* weight
+	float dailyTH;
+	int eventWeight, totWeight;
+	unordered_map<string, vector<string>>::const_iterator itr;
+	
+	for(int i = 0; i < trainingData.size(); i++){
+
+		//reset values
+		dailyTH = 0;
+		totWeight = 0;
+
+		for(int j = 0; j < statsMap.size(); j++){
+			
+		    //find the eventName in eventsMap for the events in stats.txt
+		    itr = eventsMap.find(indexVec[j]);
+		    
+		    if( itr != eventsMap.end() )
+		    {
+			eventWeight = stoi(itr->second[3]);
+			totWeight = totWeight+eventWeight;
+		    }
+			
+		    //sum of anomaly counters for each event to get the daily threshold value
+		    dailyTH += (abs(meanSDvec[j].first-trainingData[i][j])/meanSDvec[j].second)*eventWeight;
+		}
+
+		//acceptable threshold is 2 times of total weights of all events
+		totWeight = totWeight*2;
+
+		cout << "Daily Threshold for day " << i+1 << ": " << dailyTH << endl;
+		cout << "Acceptable threshold per day is: " << totWeight << endl;
+
+		//check if daily threshold exceeds acceptable threshold
+		if(dailyTH > totWeight){
+			cout << "[WARNING]: Day " << i+1 << " data is NOT OK." << endl;
+		}
+
+		else
+			cout << "[NORMAL]: Day " << i+1 << " data is OK." << endl; 
+
+		cout << endl;
+	}		
+
+	
+	cout << endl;
+}
+
+int main(int argc, char* argv[]){
+
+	srand(time(NULL));
 
 	// initial input
-	initialInput();
-	
-	// generate days data
-	generateDaysData();
-	
-	// display values of each day
+	//argv[1] = Event.txt 
+	//argv[2] = Stats.txt
+	//argv[3] = x days of data to generate
+
+	initialInput(argv[1], argv[2]);	//reading in of files and storing into an unordered_map
+	generateTrngData(argv[3]);	//generate training data for x days
+	 
+	// display values of each day for training data
 	printDaysData();
 
 	//mean and stdDev
 	calMeanStdDev();
 	
 	//Anamoly Counter
-	//calAnamoly();
+	calAnomaly();
 
 
 	return 0;
