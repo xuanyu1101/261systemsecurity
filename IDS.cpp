@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstdlib>
 #include <cmath>
+#include <string.h>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -15,24 +17,29 @@
 
 using namespace std;
 
-
-
-// map for stats 
-// pair<string, vector<string>>(statName, statVals - (mean) and (standardDev))
-static unordered_map<string, vector<string>> statsMap;
-
-//vector<string> statVals; // vector for mean and standardDev
+// map for events distribution found in stats file
+static unordered_map<string, vector<string>> statsMap;	//training data 
+static unordered_map<string, vector<string>> liveStatsMap; //live data
 
 // map for events
 // pair<string, vector<string>>(eventName, eventVals - (eventType), (minVal), (maxVal and (weight))
 static unordered_map<string, vector<string>> eventsMap;
 
-//vector<string> eventVals; // vector for (eventType), (minVal), (maxVal and (weight)
+// vectors storing generated data for x days 
+static vector<vector<float> > trainingData; //training data
+static vector<vector<float> > liveData; //live data
 
-static vector<vector<float> > trainingData;
-static vector<string> indexVec;
-static vector<pair<float,float>> meanSDvec;	//vector of pair(mean, stdDev) of each event
+// vectors storing event name that is the index of each generated value in stats map
+static vector<string> indexVec; //training data
+static vector<string> liveIndexVec; //live data
 
+// vectors of pair(mean, stdDev) of each event 
+static vector<pair<float,float>> meanSDvec; //training data	
+static vector<pair<float,float>> livemeanSDvec; //live data
+
+//Storing data in events.txt and stats.txt into the respective vectors and maps
+//Arguments: eFile = input event file name
+//	     sFile = input stats file name
 
 void initialInput(string eFile, string sFile) {
 
@@ -169,7 +176,24 @@ string prd(float x, const int decDigits) {
     	return ss.str();
 }
 
+//get current system date & time
+string datetime()
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer[80];
+
+    time (&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    strftime(buffer,80,"%d-%m-%Y %H-%M-%S",timeinfo);
+    return string(buffer);
+}
+
 // Creates 5 days of data
+// Arguments:	input = obtain event name
+//		decneeded = determine if event is continuous or discrete 
+
 float getVal(string input, int decneeded) {	
 	// find from stats map according to string
 	unordered_map<string, vector<string>>::const_iterator got = statsMap.find(input);
@@ -234,14 +258,10 @@ float getVal(string input, int decneeded) {
 	}
 
 	return randData;
-		
-	// push to individual days
-	//One.push_back(temp[0]);
-	//Two.push_back(temp[1]);
-	//Three.push_back(temp[2]);
-	//Four.push_back(temp[3]);
-	//Five.push_back(temp[4]);
 }
+
+//Generate training data
+//Arguments: numOfDays = obtain number of days of data to generate 
 
 void generateTrngData(string numOfDays) {
 	int days = stoi(numOfDays);
@@ -289,27 +309,131 @@ void generateTrngData(string numOfDays) {
 
 }
 
-// print data from each day
-void printDaysData(){
+//generate Live Data
+//Arguments: numOfDays = obtain number of days of data to generate
+//	     sFile = obtain input stats file
+
+void generateLiveData(int numOfDays, string sFile) {
+	//check if liveStatsMap exists. If exists, delete contents.
+	if(liveStatsMap.size() > 0){
+		liveStatsMap.clear();
+	}
+
+	//check if liveindexVec exists. If exists, delete contents.
+	if(liveIndexVec.size() > 0){
+		liveIndexVec.clear();
+	}
+
+	//check if liveData exists. If exists, delete contents.
+	if (liveData.size() > 0){
+		liveData.clear();
+	}
+
+	int days = numOfDays;
+	int counter = 0;
+	int numOfEvents;
+	string eventName, line, statName, mean, standardDev;
+	vector<string> statVals; // vector for mean and standardDev
+	
+	vector<string> eventVals;
+	vector<float> daysVal;
+	int decneeded = 0;
+	float data;
+	
+	//storing of live stats from newstats.txt into vector
+	//obtain individual event value split by delimiter ':'
+
+	ifstream statsFile(sFile);
+
+	while (getline(statsFile, line)){
+		stringstream ss(line);	
+		
+
+		if(counter == 0){
+			numOfEvents = stoi(line);
+		}
+
+		//push each event's values into a vector
+		else if(counter <= numOfEvents){
+			getline(ss, statName, ':');
+			getline(ss, mean, ':');
+			getline(ss, standardDev, ':');
+
+			statVals.push_back(mean);
+			statVals.push_back(standardDev);
+
+			liveStatsMap.insert(pair<string, vector<string>>(statName, statVals));
+			
+		}		
+
+		counter++;
+	}
+
+	statsFile.close();
+
+	//storing the eventNames found in newstats.txt into a vector to correspond to the index
+	for(auto& index: liveStatsMap){
+		liveIndexVec.push_back(index.first);
+	}
+		
+	
+	//generate events for x days of data
+	for(int i = 0; i < days; i++){
+
+		for (auto& event: liveStatsMap) {
+
+		    //find the event stats in eventsMap for the events in stats.txt
+		    unordered_map<string, vector<string>>::const_iterator itr = eventsMap.find(event.first);
+		    
+		    if( itr != eventsMap.end() )
+		    {
+			eventVals = itr->second;
+
+			    //check if event is continuous or discrete	
+			    // float needed? 1 - Yes, 0 - No	    
+			    if(eventVals[0] == "D")
+				decneeded = 0; 
+			    else
+				decneeded = 1;
+			
+		    
+			    eventName = event.first;
+			    data = getVal(eventName, decneeded);
+			    daysVal.push_back(data);
+		    }
+		}
+
+		liveData.push_back(daysVal);
+		daysVal.clear();
+	}
+
+}
+
+// print data from each day 
+//Arguments: dataVec = vector of generated data
+//	     idxVec = vector of corresponding indexes found in stats file
+//	     outputFile = file to store generated data 
+
+void printDaysData(vector<vector<float> > dataVec, vector<string> idxVec, string outputFile){
 	
 	cout << "========================================" << endl;
 	cout << "	ACTIVITY STIMULATION ENGINE	" << endl;
 	cout << "========================================" << endl;
 
 	//display generated data for x days on screen
-	for(int i =0; i < trainingData.size(); i++){
+	for(int i =0; i < dataVec.size(); i++){
 		cout << "Day: " << i+1 << endl;
 		cout << endl;
 
-		for(int i =0; i < indexVec.size(); i++){
-			cout << indexVec[i] << ":";
+		for(int i =0; i < idxVec.size(); i++){
+			cout << idxVec[i] << ":";
 		}
 
 		cout << endl;
 		
-		for(int j=0; j < trainingData[i].size(); j++)
+		for(int j=0; j < dataVec[i].size(); j++)
 		{
-			cout << trainingData[i][j] << ":";
+			cout << dataVec[i][j] << ":";
 		}
 		
 		cout << endl;
@@ -317,9 +441,9 @@ void printDaysData(){
 	}
 
 	//storing of data for x days in Logs.txt
-	cout << "\n[LOGS STORED IN Logs.txt]" << endl;
+	cout << "\n[LOGS STORED IN " << outputFile << "]" << endl;
 
-	std::ofstream outputLogs ("Logs.txt", std::ofstream::out);
+	std::ofstream outputLogs (outputFile, std::ofstream::out);
 
 	//obtain the index (eventName) corresponding to the values stored in each vector in trainingData
 	//i.e trainingdata[i][0] = Emails Deleted
@@ -329,16 +453,16 @@ void printDaysData(){
 	//trainingdata[i][4] = Logins
 	//to store in the first line of Logs.txt
 
-	for(int i =0; i < indexVec.size(); i++){
-		outputLogs << indexVec[i] << ":";
+	for(int i =0; i < idxVec.size(); i++){
+		outputLogs << idxVec[i] << ":";
 	}
 	
 	outputLogs<< endl;
 
-	for(int i =0; i < trainingData.size(); i++){
-		for(int j=0; j < trainingData[i].size(); j++)
+	for(int i =0; i < dataVec.size(); i++){
+		for(int j=0; j < dataVec[i].size(); j++)
 		{
-			outputLogs << trainingData[i][j] << ":";
+			outputLogs << dataVec[i][j] << ":";
 		}
 		outputLogs << endl;
 	}
@@ -348,7 +472,18 @@ void printDaysData(){
 	
 }
 
-void calMeanStdDev(){
+//Calculate mean and standard deviation
+//Arguments: instatsMap = vector of events found in stats file
+//	     dataVec = vector of generated data
+//	     idxVec = vector of corresponding indexes found in stats file
+//	     isTrainingData = check if user is testing training data or live data to store in the respective vectors
+
+void calMeanStdDev(unordered_map<string, vector<string>> instatsMap, vector<vector<float> > dataVec, vector<string> idxVec, bool isTrainingData){
+
+	//check if liveStatsMap exists. If exists, delete contents.
+	if(livemeanSDvec.size() > 0){
+		livemeanSDvec.clear();
+	}
 
 	float sum, mean, variance, stdDev;
 	
@@ -356,39 +491,54 @@ void calMeanStdDev(){
 	cout << "	ANALYSIS ENGINE		" << endl;
 	cout << "=============================" << endl;
 
-	for(int i = 0; i < statsMap.size(); i++){
+	//loop through map containing the stats from stats file.
+	//get standard deviation and mean across generated x days' data for each event in the stats file
+	for(int i = 0; i < instatsMap.size(); i++){
 		//reset values
 		sum = 0;
 		variance = 0;
 
-		cout << "Generating mean & standard deviation for " << indexVec[i] << endl;
+		cout << "Generating mean & standard deviation for " << idxVec[i] << endl;
 		
-		for(int j = 0; j < trainingData.size(); j++){
-			sum += trainingData[j][i];
+		for(int j = 0; j < dataVec.size(); j++){
+			sum += dataVec[j][i];
 		}
 
-		mean = sum/trainingData.size();
+		//calculate mean
+		mean = sum/dataVec.size();
 		
 		cout << "Mean: " << mean << endl;
 
-		for(int k = 0; k < trainingData.size(); k++){
-			variance += pow(trainingData[k][i] - mean, 2);
+		for(int k = 0; k < dataVec.size(); k++){
+			variance += pow(dataVec[k][i] - mean, 2);
 		}
 
-		variance = variance/trainingData.size();
+		//obtain standard deviation
+		variance = variance/dataVec.size();
 		stdDev = sqrt(variance);
 		
 		cout << "Standard Deviation: " << stdDev << endl;
 
-		meanSDvec.push_back(make_pair(mean, stdDev)); //vector storing the mean and standard deviation for each event
-		
+		if(isTrainingData){
+			meanSDvec.push_back(make_pair(mean, stdDev)); //vector storing the mean and standard deviation for each event
+		}
+
+		else
+			livemeanSDvec.push_back(make_pair(mean, stdDev)); //vector storing the mean and standard deviation for each event
+
 		cout << endl;	
 	}
 	
 	cout << endl;
 }
 
-void calAnomaly(){
+//Calculate Daily Threshold and determine if there's anomaly
+//Arguments: dataVec = vector of generated data
+//	     idxVec = vector of corresponding indexes found in stats file
+//	     instatsMap = map of events found in stats file
+//	     meanSDVector = vector containin mean and standard deviation of generated data of each event
+
+void calAnomaly(vector<vector<float> > dataVec, vector<string> idxVec, unordered_map<string, vector<string>> instatsMap, vector<pair<float,float>> meanSDVector){
 
 	cout << "=============================" << endl;
 	cout << "	ALERT ENGINE		" << endl;
@@ -399,16 +549,16 @@ void calAnomaly(){
 	int eventWeight, totWeight;
 	unordered_map<string, vector<string>>::const_iterator itr;
 	
-	for(int i = 0; i < trainingData.size(); i++){
+	for(int i = 0; i < dataVec.size(); i++){
 
 		//reset values
 		dailyTH = 0;
 		totWeight = 0;
 
-		for(int j = 0; j < statsMap.size(); j++){
+		for(int j = 0; j < instatsMap.size(); j++){
 			
 		    //find the eventName in eventsMap for the events in stats.txt
-		    itr = eventsMap.find(indexVec[j]);
+		    itr = eventsMap.find(idxVec[j]);
 		    
 		    if( itr != eventsMap.end() )
 		    {
@@ -417,7 +567,7 @@ void calAnomaly(){
 		    }
 			
 		    //sum of anomaly counters for each event to get the daily threshold value
-		    dailyTH += (abs(meanSDvec[j].first-trainingData[i][j])/meanSDvec[j].second)*eventWeight;
+		    dailyTH += (abs(meanSDVector[j].first-dataVec[i][j])/meanSDVector[j].second)*eventWeight;
 		}
 
 		//acceptable threshold is 2 times of total weights of all events
@@ -441,9 +591,13 @@ void calAnomaly(){
 	cout << endl;
 }
 
+//main function
 int main(int argc, char* argv[]){
 
 	srand(time(NULL));
+
+	string input, newStatsFile;
+	int numOfDays;
 
 	// initial input
 	//argv[1] = Event.txt 
@@ -454,13 +608,63 @@ int main(int argc, char* argv[]){
 	generateTrngData(argv[3]);	//generate training data for x days
 	 
 	// display values of each day for training data
-	printDaysData();
+	printDaysData(trainingData, indexVec, "TrainingLogs.txt");
 
 	//mean and stdDev
-	calMeanStdDev();
+	calMeanStdDev(statsMap, trainingData, indexVec, true);
 	
 	//Anamoly Counter
-	calAnomaly();
+	calAnomaly(trainingData, indexVec, statsMap, meanSDvec);
+
+	cout << "Training data completed. " << endl;
+
+	//pause screen
+	cin.ignore();
+	cout << "Please press any key to continue..." << endl;
+	cin.get();
+	//system("pause");
+
+	system("clear");
+	
+	//Menu option that allows user to input a file and number of days unless 'q' is specified
+	do{
+		cout << endl;
+		cout << "===================== IDS Program ============================ " << endl;
+		cout << "		   [ Enter q to quit! ] " << endl;
+		cout << endl;
+		cout << "Enter a file: ";
+		
+		getline(cin, input);
+		newStatsFile = input;
+		
+		//check if user enters 'q' 
+		if (strcmp (input.c_str(), "q") != 0){
+			cout << "Enter number of days: ";
+			cin >> numOfDays;
+			cout << endl;
+
+			ifstream file(newStatsFile);
+
+ 			if (file.is_open()) {
+				generateLiveData(numOfDays, newStatsFile);
+
+				string outputFile = datetime() + ".txt";
+				printDaysData(liveData, liveIndexVec, outputFile);
+				calMeanStdDev(liveStatsMap, liveData, liveIndexVec, false);
+				calAnomaly(liveData, liveIndexVec, liveStatsMap, livemeanSDvec);
+				
+			}
+
+			else{
+				cout << "Invalid file entered. " << endl;
+				cout << endl;
+			}
+
+		}			
+
+		cin.ignore();		
+
+	}while (strcmp (input.c_str(),"q") != 0);
 
 
 	return 0;
